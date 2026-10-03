@@ -1,8 +1,8 @@
 /* English for Mum — service worker (generated at build time). */
-const VERSION = '20261003-supabase3';
+const VERSION = '20261003-supabase4';
 const SHELL = 'efm-shell-' + VERSION;
 const RUNTIME = 'efm-runtime-v1';
-const PRECACHE = ["./assets/app-4SPHSBLZ.css","./assets/app-ICOKYTHB.js","./icons/apple-touch-icon.png","./icons/icon-192.png","./icons/icon-512.png","./icons/icon-maskable-512.png","./index.html","./invite.html","./manifest.webmanifest","./"];
+const PRECACHE = ["./assets/app-4SPHSBLZ.css","./assets/app-ICOKYTHB.js","./icons/apple-touch-icon.png","./icons/icon-192.png","./icons/icon-512.png","./icons/icon-maskable-512.png","./index.html","./invite.html","./admin.html","./manifest.webmanifest","./"];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));

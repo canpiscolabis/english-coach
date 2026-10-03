@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#F7F3EC" />
+  <title>Panel Admin — English Coach</title>
+  <script src="./config.js"></script>
+  <style>
+    :root{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#243447;background:#f7f3ec;font-synthesis:none}*{box-sizing:border-box}body{margin:0;padding:24px}main{max-width:1050px;margin:auto}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:12px 0 24px}h1{font-size:1.7rem;margin:0}p{line-height:1.5;color:#526174}.card{background:white;border:1px solid #e9e2d7;border-radius:18px;padding:20px;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px}.kpi span{display:block;color:#64748b;font-size:.85rem}.kpi b{display:block;font-size:1.5rem;margin-top:10px}.field{display:grid;gap:7px;margin:14px 0;font-weight:600}.input{font:inherit;padding:12px 14px;border:1px solid #cbd5e1;border-radius:11px;width:100%;background:white;color:#243447}.btn{border:0;border-radius:11px;background:#174f46;color:white;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer}.btn:disabled{opacity:.55}.btn.secondary{background:#e8f0ee;color:#174f46}.toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.toolbar select{max-width:360px}.status{min-height:24px;color:#9a3412}.status.ok{color:#166534}.hidden{display:none}.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;min-width:650px}th,td{text-align:left;border-bottom:1px solid #e9e2d7;padding:10px 8px;font-size:.9rem}th{color:#64748b}.muted{color:#64748b}.small{font-size:.88rem}a{color:#174f46}.empty{padding:24px;text-align:center;color:#64748b}
+  </style>
+</head>
+<body>
+<main>
+  <div class="top"><h1>Panel Admin · English Coach</h1><a href="./">Volver a la app</a></div>
+  <section id="login" class="card">
+    <h2>Acceso de administrador</h2>
+    <p>Entra con el correo y la contraseña de la cuenta Admin.</p>
+    <form id="login-form">
+      <label class="field">Correo<input class="input" id="email" type="email" autocomplete="username" required></label>
+      <label class="field">Contraseña<input class="input" id="password" type="password" autocomplete="current-password" required></label>
+      <button class="btn" id="login-button">Entrar</button>
+    </form>
+    <p id="login-status" class="status" role="status" aria-live="polite"></p>
+  </section>
+  <section id="dashboard" class="hidden">
+    <div class="card toolbar"><label class="field" style="flex:1;min-width:240px;margin:0">Alumna<select id="student" class="input"></select></label><button id="refresh" class="btn secondary">Actualizar</button><button id="signout" class="btn">Salir</button></div>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <div id="summary" class="grid"></div>
+    <div class="card"><h2>Perfil de aprendizaje</h2><div id="profile" class="small muted">Selecciona una alumna.</div></div>
+    <div class="card"><h2>Sesiones recientes</h2><div id="sessions" class="table-wrap"></div></div>
+    <div class="card"><h2>Pruebas de nivel</h2><div id="tests" class="table-wrap"></div></div>
+  </section>
+</main>
+<script>
+(() => {
+  const cfg=window.__EFM_CONFIG__||{}, base=(cfg.SUPABASE_URL||'').replace(/\/$/,''), key=cfg.SUPABASE_ANON_KEY;
+  const $=s=>document.querySelector(s), login=$('#login'), dash=$('#dashboard'), loginStatus=$('#login-status'), status=$('#status');
+  let token='', userId='', learners=[];
+  const esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  async function api(path,options={}){
+    const r=await fetch(base+path,{...options,headers:{apikey:key,authorization:`Bearer ${token}`,'content-type':'application/json',...(options.headers||{})}});
+    const body=await r.json().catch(()=>null); if(!r.ok)throw new Error(body?.msg||body?.message||body?.error_description||`Error ${r.status}`); return body;
+  }
+  async function rows(table,select,student){return api(`/rest/v1/${table}?select=${encodeURIComponent(select)}&student_id=eq.${encodeURIComponent(student)}&limit=1000`)}
+  function metric(label,value,detail=''){return `<article class="card kpi"><span>${esc(label)}</span><b>${esc(value)}</b>${detail?`<span>${esc(detail)}</span>`:''}</article>`}
+  function fmtDate(v){return v?new Date(v).toLocaleString('es-ES',{dateStyle:'medium',timeStyle:'short'}):'—'}
+  function table(headers,records,render){if(!records.length)return '<div class="empty">Todavía no hay datos.</div>';return `<table><thead><tr>${headers.map(x=>`<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${records.map(render).join('')}</tbody></table>`}
+  async function loadStudents(){
+    const own=await api(`/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,role,display_name&limit=1`);
+    if(!own[0]||own[0].role!=='admin')throw new Error('Esta cuenta no tiene rol de administrador.');
+    learners=await api('/rest/v1/profiles?select=id,display_name,role&role=eq.student&order=display_name.asc&limit=100');
+    const select=$('#student'); select.replaceChildren(...learners.map(x=>{const o=document.createElement('option');o.value=x.id;o.textContent=x.display_name||'Alumna';return o}));
+    if(!learners.length){$('#summary').innerHTML='';$('#profile').textContent='Aún no hay cuentas de alumna.';$('#sessions').innerHTML='';$('#tests').innerHTML='';return}
+    login.classList.add('hidden');dash.classList.remove('hidden');await loadStudent();
+  }
+  async function loadStudent(){
+    const id=$('#student').value, learner=learners.find(x=>x.id===id); if(!id)return;
+    status.classList.remove('ok');status.textContent=`Cargando el progreso de ${learner?.display_name||'la alumna'}…`;
+    try{
+      const [p,s,c,v,l,pt]=await Promise.all([
+        rows('student_profile','display_name,english_profile,last_study_date,streak_days,settings',id),
+        rows('study_sessions','started_at,ended_at,duration_s,speaking_s,kind,score,errors_count,new_words,review_items,device',id),
+        rows('conversations','started_at,ended_at,turns_count,scenario_id',id),
+        rows('vocabulary_progress','mastery,spoken_ok',id),
+        rows('level_tests','kind,completed_at,level_result,score,status',id),
+        rows('placement_tests','completed_at,result,status',id)
+      ]);
+      const profile=p[0]||{}, done=l.filter(x=>x.status==='completed'), sessions=[...s].sort((a,b)=>(b.started_at||'').localeCompare(a.started_at||'')), days=new Set(s.map(x=>(x.started_at||'').slice(0,10)).filter(Boolean)).size;
+      const minutes=Math.round(s.reduce((n,x)=>n+(Number(x.duration_s)||0),0)/60), speaking=Math.round(s.reduce((n,x)=>n+(Number(x.speaking_s)||0),0)/60), conv=c.filter(x=>x.ended_at).length, mastered=v.filter(x=>Number(x.mastery)>=.8).length;
+      $('#summary').innerHTML=[metric('Nivel estimado',profile.english_profile?.levels?.general||'—'),metric('Días de estudio',days,`Racha actual: ${profile.streak_days||0}`),metric('Tiempo total',`${minutes} min`,`${speaking} min hablando`),metric('Conversaciones',conv),metric('Palabras dominadas',mastered,`Vocabulario trabajado: ${v.length}`),metric('Pruebas completadas',done.length+pt.filter(x=>x.status==='completed').length)].join('');
+      const levels=profile.english_profile?.levels||{};
+      $('#profile').innerHTML=profile.english_profile?`<p><b>Nivel general: ${esc(levels.general||'—')}</b> · Último estudio: ${esc(profile.last_study_date||'—')}</p><p>${['speaking','listening','pronunciation','fluency','grammar','vocabulary','reading'].map(k=>`${esc(k)}: <b>${esc(levels[k]||'—')}</b>`).join(' &nbsp;·&nbsp; ')}</p>`:`<p>Aún no ha completado una prueba de nivel.</p>`;
+      $('#sessions').innerHTML=table(['Fecha','Duración','Hablando','Tipo','Nota','Errores'],sessions.slice(0,30),x=>`<tr><td>${esc(fmtDate(x.started_at))}</td><td>${esc(Math.round((Number(x.duration_s)||0)/60))} min</td><td>${esc(Math.round((Number(x.speaking_s)||0)/60))} min</td><td>${esc(x.kind)}</td><td>${esc(x.score==null?'—':`${Math.round(x.score*100)}%`)}</td><td>${esc(x.errors_count||0)}</td></tr>`);
+      const tests=[...done.map(x=>({...x,source:'Control'})),...pt.filter(x=>x.status==='completed').map(x=>({...x,source:'Inicial',level_result:x.result?.levels?.general||x.result?.level||'—'}))].sort((a,b)=>(b.completed_at||'').localeCompare(a.completed_at||''));
+      $('#tests').innerHTML=table(['Fecha','Tipo','Nivel','Resultado'],tests,x=>`<tr><td>${esc(fmtDate(x.completed_at))}</td><td>${esc(x.source||x.kind)}</td><td>${esc(x.level_result||'—')}</td><td>${esc(x.score==null?'—':`${Math.round(x.score*100)}%`)}</td></tr>`);
+      status.classList.add('ok');status.textContent=`Mostrando únicamente el progreso de ${learner?.display_name||'la alumna'}.`;
+    }catch(e){status.textContent=`No se pudieron cargar los datos: ${e.message}`}
+  }
+  $('#login-form').addEventListener('submit',async e=>{
+    e.preventDefault();$('#login-button').disabled=true;loginStatus.textContent='Comprobando acceso…';
+    try{const r=await fetch(`${base}/auth/v1/token?grant_type=password`,{method:'POST',headers:{apikey:key,'content-type':'application/json'},body:JSON.stringify({email:$('#email').value.trim(),password:$('#password').value})});const data=await r.json();if(!r.ok)throw new Error(data.msg||data.message||'Correo o contraseña incorrectos.');token=data.access_token;userId=data.user.id;$('#password').value='';await loadStudents()}
+    catch(err){loginStatus.textContent=err.message;token='';userId=''}finally{$('#login-button').disabled=false}
+  });
+  $('#student').addEventListener('change',loadStudent);$('#refresh').addEventListener('click',loadStudent);
+  $('#signout').addEventListener('click',()=>{token='';userId='';learners=[];dash.classList.add('hidden');login.classList.remove('hidden');status.textContent='';$('#student').replaceChildren()});
+})();
+</script>
+</body>
+</html>
